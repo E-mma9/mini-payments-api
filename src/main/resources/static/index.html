@@ -1,0 +1,351 @@
+<!doctype html>
+<!--
+  Small test page for the API. Spring Boot serves files from /static automatically,
+  so this page runs on the same origin as the API: no build step and no CORS needed.
+-->
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini Payments</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #667085; --border: #e2e5ea;
+    --accent: #2f6fde; --good: #1f8a4c; --bad: #c4362c; --soft: #eef1f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --card: #1b1f27; --text: #e6e8ec; --muted: #9aa3b2; --border: #2c323d;
+      --accent: #6d9cf0; --good: #4cc082; --bad: #f07167; --soft: #232833;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 24px;
+           background: var(--card); border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 18px; margin: 0 auto 0 0; }
+  a { color: var(--accent); }
+  .badge { padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; font-size: 12px; font-weight: 700; }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;
+         padding: 16px 24px; max-width: 1200px; margin: 0 auto; }
+  section { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+  section.wide { grid-column: 1 / -1; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  input, select, button { font: inherit; width: 100%; padding: 8px 10px; border-radius: 6px;
+                          border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  button { margin-top: 12px; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent); }
+  .msg { margin-top: 10px; min-height: 1.5em; white-space: pre-wrap; }
+  .good { color: var(--good); }
+  .bad { color: var(--bad); }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr.clickable { cursor: pointer; }
+  tbody tr.clickable:hover, tbody tr.selected { background: var(--soft); }
+  .log-entry { padding: 8px 0; border-top: 1px solid var(--border); }
+  .log-entry:first-child { border-top: none; }
+  pre { margin: 6px 0 0; padding: 8px; background: var(--soft); border-radius: 6px; overflow-x: auto; font-size: 12px; }
+  @media (max-width: 600px) { header, main { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mini Payments</h1>
+  <span>Health: <span id="health" class="badge muted">…</span></span>
+  <a href="/actuator/health" target="_blank">/actuator/health</a>
+  <a href="/actuator/prometheus" target="_blank">/actuator/prometheus</a>
+</header>
+
+<main>
+  <section>
+    <h2>Nieuw account</h2>
+    <form id="account-form">
+      <label for="owner">Eigenaar</label>
+      <input id="owner" placeholder="Alice" autocomplete="off">
+      <label for="initial-balance">Beginsaldo</label>
+      <input id="initial-balance" inputmode="decimal" placeholder="100.00" autocomplete="off">
+      <button type="submit">Account aanmaken</button>
+    </form>
+    <div id="account-msg" class="msg"></div>
+  </section>
+
+  <section>
+    <h2>Overboeken</h2>
+    <form id="transfer-form">
+      <label for="from">Van</label>
+      <select id="from"></select>
+      <label for="to">Naar</label>
+      <select id="to"></select>
+      <label for="amount">Bedrag</label>
+      <input id="amount" inputmode="decimal" placeholder="25.00" autocomplete="off">
+      <button type="submit">Overboeken</button>
+    </form>
+    <button id="burst" type="button" class="secondary">Concurrency-test: 20× tegelijk € 1,00</button>
+    <div id="transfer-msg" class="msg"></div>
+  </section>
+
+  <section class="wide">
+    <h2>Accounts <span id="total" class="muted"></span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Eigenaar</th><th class="num">Saldo</th><th>Aangemaakt</th><th>Id</th></tr></thead>
+        <tbody id="accounts"></tbody>
+      </table>
+    </div>
+    <p id="accounts-empty" class="muted">Nog geen accounts.</p>
+  </section>
+
+  <section class="wide">
+    <h2 id="transfers-title">Transfers</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Tijd</th><th>Van</th><th>Naar</th><th class="num">Bedrag</th></tr></thead>
+        <tbody id="transfers"></tbody>
+      </table>
+    </div>
+    <p id="transfers-empty" class="muted">Klik op een account om zijn transfers te zien.</p>
+  </section>
+
+  <section class="wide">
+    <h2>Log <span class="muted">(laatste requests met status en JSON)</span></h2>
+    <div id="log" class="muted">Nog niets verstuurd.</div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const euro = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' });
+let accounts = [];
+let selectedId = null;
+
+// Sends a request and returns { ok, status, data }. User actions are shown in the log;
+// background refreshes pass quiet: true so they don't flood it.
+async function api(method, path, body, { quiet = false } = {}) {
+  const options = { method, headers: {} };
+  if (body !== undefined) {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch(path, options);
+  const text = await response.text();
+  let data = text;
+  try { data = text ? JSON.parse(text) : null; } catch { /* not JSON: keep the text */ }
+  if (!quiet) addLog(`${method} ${path}`, response.status, body, data);
+  return { ok: response.ok, status: response.status, data };
+}
+
+// "25,00" and "25.00" both work; an empty field is sent as null so the API's validation answers.
+function toAmount(value) {
+  const trimmed = value.trim().replace(',', '.');
+  return trimmed === '' ? null : Number(trimmed);
+}
+
+function cell(text, className) {
+  const td = document.createElement('td');
+  td.textContent = text; // textContent, never innerHTML: an owner name can't inject HTML
+  if (className) td.className = className;
+  return td;
+}
+
+function formatTime(iso) {
+  return new Date(iso).toLocaleString('nl-NL');
+}
+
+function ownerOf(id) {
+  return accounts.find((account) => account.id === id)?.owner ?? id;
+}
+
+function showMessage(id, text, ok) {
+  $(id).textContent = text;
+  $(id).className = 'msg ' + (ok ? 'good' : 'bad');
+}
+
+// Turns a ProblemDetail response from GlobalExceptionHandler into readable text.
+function describeError({ status, data }) {
+  if (data && typeof data === 'object') {
+    const fields = Object.entries(data.errors ?? {}).map(([field, message]) => `\n• ${field}: ${message}`).join('');
+    return `${status} ${data.title ?? ''}: ${data.detail ?? ''}${fields}`;
+  }
+  return `${status}`;
+}
+
+function addLog(title, status, requestBody, responseBody) {
+  const log = $('log');
+  if (log.classList.contains('muted')) {
+    log.classList.remove('muted');
+    log.textContent = '';
+  }
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  const statusSpan = document.createElement('strong');
+  statusSpan.textContent = status;
+  if (typeof status === 'number') statusSpan.className = status < 400 ? 'good' : 'bad';
+  const time = document.createElement('span');
+  time.className = 'muted';
+  time.textContent = '  ' + new Date().toLocaleTimeString('nl-NL');
+  entry.append(statusSpan, ' ', title, time);
+  if (requestBody !== undefined) entry.append(pre('→ ' + JSON.stringify(requestBody, null, 2)));
+  if (responseBody != null) entry.append(pre('← ' + JSON.stringify(responseBody, null, 2)));
+  log.prepend(entry);
+  while (log.children.length > 15) log.lastChild.remove();
+}
+
+function pre(text) {
+  const element = document.createElement('pre');
+  element.textContent = text;
+  return element;
+}
+
+async function checkHealth() {
+  const badge = $('health');
+  try {
+    const { data } = await api('GET', '/actuator/health', undefined, { quiet: true });
+    badge.textContent = data?.status ?? 'ONBEKEND';
+    badge.className = 'badge ' + (data?.status === 'UP' ? 'good' : 'bad');
+  } catch {
+    badge.textContent = 'ONBEREIKBAAR';
+    badge.className = 'badge bad';
+  }
+}
+
+async function loadAccounts() {
+  const { ok, data } = await api('GET', '/api/accounts', undefined, { quiet: true });
+  if (!ok) return;
+  const idsChanged = data.map((a) => a.id).join() !== accounts.map((a) => a.id).join();
+  accounts = data;
+  renderAccounts();
+  // Only rebuild the dropdowns when accounts were added, so a refresh doesn't close an open dropdown.
+  if (idsChanged) renderSelects();
+  if (selectedId) await loadTransfers();
+}
+
+function renderAccounts() {
+  $('accounts').replaceChildren(...accounts.map((account) => {
+    const row = document.createElement('tr');
+    row.className = 'clickable' + (account.id === selectedId ? ' selected' : '');
+    row.append(
+        cell(account.owner),
+        cell(euro.format(account.balance), 'num'),
+        cell(formatTime(account.createdAt)),
+        cell(account.id, 'mono muted'));
+    row.addEventListener('click', () => selectAccount(account.id));
+    return row;
+  }));
+  $('accounts-empty').hidden = accounts.length > 0;
+  // Summed in whole cents: adding decimal numbers in JavaScript is not exact.
+  const totalCents = accounts.reduce((sum, account) => sum + Math.round(account.balance * 100), 0);
+  $('total').textContent = accounts.length ? `· totaal ${euro.format(totalCents / 100)}` : '';
+}
+
+function renderSelects() {
+  for (const id of ['from', 'to']) {
+    const select = $(id);
+    const previous = select.value;
+    select.replaceChildren(...accounts.map((account) => new Option(account.owner, account.id)));
+    if (accounts.some((account) => account.id === previous)) select.value = previous;
+  }
+  // Start with two different accounts selected.
+  if ($('to').value === $('from').value && accounts.length > 1) {
+    $('to').value = accounts.find((account) => account.id !== $('from').value).id;
+  }
+}
+
+async function selectAccount(id) {
+  selectedId = id;
+  renderAccounts();
+  await loadTransfers();
+}
+
+async function loadTransfers() {
+  const { ok, data } = await api('GET', `/api/accounts/${selectedId}/transfers`, undefined, { quiet: true });
+  if (!ok) {
+    selectedId = null; // account no longer exists, e.g. the database was reset
+    renderTransfers([]);
+    return;
+  }
+  renderTransfers(data);
+}
+
+function renderTransfers(transfers) {
+  $('transfers-title').textContent = selectedId
+      ? `Transfers van ${ownerOf(selectedId)} (nieuwste eerst)`
+      : 'Transfers';
+  $('transfers').replaceChildren(...transfers.map((transfer) => {
+    const outgoing = transfer.fromAccountId === selectedId;
+    const row = document.createElement('tr');
+    row.append(
+        cell(formatTime(transfer.createdAt)),
+        cell(ownerOf(transfer.fromAccountId)),
+        cell(ownerOf(transfer.toAccountId)),
+        cell((outgoing ? '− ' : '+ ') + euro.format(transfer.amount), 'num ' + (outgoing ? 'bad' : 'good')));
+    return row;
+  }));
+  $('transfers-empty').textContent = !selectedId
+      ? 'Klik op een account om zijn transfers te zien.'
+      : transfers.length ? '' : 'Nog geen transfers.';
+}
+
+$('account-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const body = { owner: $('owner').value, initialBalance: toAmount($('initial-balance').value) };
+  try {
+    const result = await api('POST', '/api/accounts', body);
+    if (result.ok) {
+      showMessage('account-msg', `Account aangemaakt voor ${result.data.owner}`, true);
+      $('owner').value = '';
+      $('initial-balance').value = '';
+    } else {
+      showMessage('account-msg', describeError(result), false);
+    }
+    await loadAccounts();
+  } catch {
+    showMessage('account-msg', 'App niet bereikbaar', false);
+  }
+});
+
+$('transfer-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const body = { fromAccountId: $('from').value || null, toAccountId: $('to').value || null,
+                 amount: toAmount($('amount').value) };
+  try {
+    const result = await api('POST', '/api/transfers', body);
+    showMessage('transfer-msg', result.ok
+        ? `${euro.format(result.data.amount)} overgemaakt van ${ownerOf(body.fromAccountId)} naar ${ownerOf(body.toAccountId)}`
+        : describeError(result), result.ok);
+    await loadAccounts();
+  } catch {
+    showMessage('transfer-msg', 'App niet bereikbaar', false);
+  }
+});
+
+// Fires 20 identical transfers at once. With @Version some of them lose the race and get a 409,
+// but no money is lost: the total at the top of the accounts table stays the same.
+$('burst').addEventListener('click', async () => {
+  const body = { fromAccountId: $('from').value || null, toAccountId: $('to').value || null, amount: 1 };
+  const results = await Promise.all(Array.from({ length: 20 }, () =>
+      api('POST', '/api/transfers', body, { quiet: true }).catch(() => ({ status: 'netwerkfout' }))));
+  const counts = {};
+  for (const { status } of results) counts[status] = (counts[status] ?? 0) + 1;
+  const summary = Object.entries(counts).map(([status, count]) => `${count}× ${status}`).join(', ');
+  addLog('POST /api/transfers × 20 (tegelijk)', summary, body, counts);
+  showMessage('transfer-msg',
+      `Resultaat: ${summary}\n201 = gelukt · 409 = conflict (optimistic locking) · 400 = te weinig saldo`, true);
+  await loadAccounts();
+});
+
+// Refresh every 5 seconds, so changes made with curl or psql also show up here.
+async function refresh() {
+  await checkHealth();
+  try { await loadAccounts(); } catch { /* app is down; the health badge already shows it */ }
+}
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
