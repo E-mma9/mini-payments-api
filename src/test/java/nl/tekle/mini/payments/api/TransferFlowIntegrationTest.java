@@ -1,5 +1,6 @@
 package nl.tekle.mini.payments.api;
 
+import static org.hamcrest.Matchers.hasItems;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -43,6 +44,10 @@ class TransferFlowIntegrationTest {
         mockMvc.perform(get("/api/accounts/{id}", bobId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.balance").value(80.0));
+
+        mockMvc.perform(get("/api/accounts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].owner", hasItems("Alice", "Bob")));
     }
 
     private String createAccount(String owner, String initialBalance) throws Exception {

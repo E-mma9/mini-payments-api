@@ -1,0 +1,53 @@
+./mvnw test --> Maven testing
+
+./mvnw spring-boot:run -> starten zonder db
+
+Prometheus is ingebouwd in Spring Boot:
+1. Actuator met Micrometer die er al in zit. Deze verzamelt automatisch metrics zoals HTTP-requests, memory, threads en
+db connections. 
+
+2. pom.xml prometheus-vertaler
+Binnen pom.xml zit een dependency die metrics om zet naar tekstformaat omschrijft naar 
+prometheus begrijpende taal. 
+
+3. Het endpoint openzetten (application.properties)
+management.endpoint.web.exposure.include=health.prometheus
+Spring boot maakt alleen health via http bereikbaar nu is de /Actuator/prometheus ook beschikbaar.
+
+--------------------
+App starten met postgresql
+
+docker run --rm --name payments-db \
+-e POSTGRES_DB=payments -e POSTGRES_USERS=payments \
+-e POSTGRES_HOST_AUTH_METHOD=trust \
+-p 5432:5432 postgres:17
+
+In een tweede terminale de app starten:
+
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/payments \
+SPRING_DATASOURCE_USERNAME=payments \
+./mvnw spring-boot:run
+
+
+
+In de database komen vanuit host:
+
+psql -h localhost -U payments -d payments
+
+De belangrijkste psql-commando's:
+
+┌─────────────┬────────────────────────────────────────────────────────┐
+│  Commando   │                      Wat het doet                      │
+├─────────────┼────────────────────────────────────────────────────────┤
+│ \conninfo   │ Met welke database en gebruiker ben ik verbonden?      │
+├─────────────┼────────────────────────────────────────────────────────┤
+│ \dt         │ Toon de tabellen                                       │
+├─────────────┼────────────────────────────────────────────────────────┤
+│ \d accounts │ Toon de kolommen, constraints en indexes van een tabel │
+├─────────────┼────────────────────────────────────────────────────────┤
+│ \di         │ Toon de indexes                                        │
+├─────────────┼────────────────────────────────────────────────────────┤
+│ \x          │ Brede rijen onder elkaar tonen (aan/uit)               │
+├─────────────┼────────────────────────────────────────────────────────┤
+│ \q          │ Afsluiten                                              │
+└─────────────┴────────────────────────────────────────────────────────┘

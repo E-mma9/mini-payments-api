@@ -1,5 +1,6 @@
 package nl.tekle.mini.payments.api.account;
 
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.validation.Valid;
@@ -27,6 +28,11 @@ public class AccountController {
     @ResponseStatus(HttpStatus.CREATED)
     public Account create(@Valid @RequestBody CreateAccountRequest request) {
         return accountService.create(request);
+    }
+
+    @GetMapping
+    public List<Account> findAll() {
+        return accountService.findAll();
     }
 
     @GetMapping("/{id}")
