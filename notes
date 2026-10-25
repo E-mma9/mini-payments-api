@@ -85,3 +85,56 @@ docker run --rm -p 8080:8080 \
 -e -> variablen
 --rm is opruimen nadat container stopt 
 -p 8080:8080 docker poort linken aan laptop poort 
+
+Fase 3: Multistage dockerfile
+Je werkt in meerder stages in de file en de uiteindelijke stage word de image van gemaakt.
+
+# stage 1: Building image containing both Maven and Java 21
+FROM maven:3.9.9-eclipse-temurin-21 as BUILD
+# De base image waar we alles op kunnen compilen. Deze bevat devkit en Maven.
+# as BUILD kun je dan gebruiken als verwijzing
+WORKDIR /app
+#directory waarin word gewerkt.
+COPY . .
+
+#copied hele project, dit is niet best-practice aangezien de dependicies in pom.xml 
+# nog worden aangepast maar voor nu oke. 
+
+RUN mvn package -DskipTests
+# compile het project in de juist image
+
+# stage 2: runtime 
+FROM eclipse-temurin:21-jre-alpine as RUNTIME
+#maak gebruik van een zo licht mogelijke container die jre bevat zodat die kan runnen.
+#denk bij iedere image gebruikt dat er mogelijk andere commandos kunnen zijn
+
+WORKDIR /app
+# weer verwijzen welke dir je gaat werken
+
+RUN adduser -S appuser
+#maak een nieuwe user aan. let hierop dat dit een ander command is als die van de vorige image.
+#omdat dit alpine is
+
+COPY --from=BUILD /app/target/*-SNAPSHOT.jar app.jar
+#kopieer de compiled omgeving vanuit de stage 1 image en drop hem in de runtime image.
+
+USER appuser
+# Welke user alles runt 
+
+EXPOSE 8080
+#documentatie van welke poort
+
+ENTRYPOINT [ "java", "-jar", "app.jar" ]
+#commandos die worden uitgevoerd bij start.
+
+Resultaat:
+
+De reden van deze Multistage dockerfile is zodat iedereen dus nu gewoon dit dockerfile kan gebruiken
+om te compilen en te draaien zonder handmatig te compilen. Ook is de uiteindelijke image veel kleiner 
+dan de vorige die we gebruikt hadden. Zie onderstaande:
+
+IMAGE                   ID             DISK USAGE   CONTENT SIZE   
+mini-payments-api:dev   e8e219763ad2        402MB          128MB -> multistage image      
+test:tag1               ea63916afc90        825MB          265MB -> originele image
+
+Minder megabytes betekent snellere pulls op k8s, snellere scale up en minder gewicht voor de pipeline
