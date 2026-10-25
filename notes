@@ -51,3 +51,37 @@ De belangrijkste psql-commando's:
 ├─────────────┼────────────────────────────────────────────────────────┤
 │ \q          │ Afsluiten                                              │
 └─────────────┴────────────────────────────────────────────────────────┘
+
+
+Issues die ik tegenkwam:
+Payments role:
+Docker image had de ROLE payments niet ingebouwd dus startte hij de container niet en kon 
+Java spring boot ook niet correct starten aangezien deze afhankelijk is van de db en de role.
+Oplossing:
+De container opnieuw aanmaken en zorgen dat die de role aan maakt:
+docker rm -f <containernaam>
+docker run -d --name payments-db \
+  -e POSTGRES_USER=payments \
+  -e POSTGRES_PASSWORD=payments \
+  -e POSTGRES_DB=payments \
+  -p 5432:5432 \
+  -v payments-data:/var/lib/postgresql/data \ #volume gemount zodat dingen in container blijven 
+  postgres:16
+
+Fase 2:
+
+one stage dockerfile is aangemaakt.
+1. compileer eerst de code met:
+./mvnw package -DskipTests
+2. Bouw de image 
+docker build -t mini-payments-api:dev .
+-t -> geeft naam en tag. De punt op laatste is als aangeven vanuit current directory.
+3. Draai de container en zet de juist omgevingsvariablen erin (db info)
+docker run --rm -p 8080:8080 \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/payments \
+  -e SPRING_DATASOURCE_USERNAME=payments \
+  -e SPRING_DATASOURCE_PASSWORD=payments \
+  mini-payments-api:dev
+-e -> variablen
+--rm is opruimen nadat container stopt 
+-p 8080:8080 docker poort linken aan laptop poort 
