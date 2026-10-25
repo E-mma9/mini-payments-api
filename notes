@@ -138,3 +138,8 @@ mini-payments-api:dev   e8e219763ad2        402MB          128MB -> multistage i
 test:tag1               ea63916afc90        825MB          265MB -> originele image
 
 Minder megabytes betekent snellere pulls op k8s, snellere scale up en minder gewicht voor de pipeline
+
+Fase 4: Docker-compose file voor postgres en de app
+Snelle docker compose gemaakt zonder volume. Let op dat je alle environmental variables erin hebt.
+En bij het maken van een image je de docker file in de docker compose kan aangeven zodat docker-compose de run zelf start.
+build: . -> zo doe je hem erin
