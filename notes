@@ -85,3 +85,83 @@ docker run --rm -p 8080:8080 \
 -e -> variablen
 --rm is opruimen nadat container stopt 
 -p 8080:8080 docker poort linken aan laptop poort 
+
+Fase 3: Multistage dockerfile
+Je werkt in meerder stages in de file en de uiteindelijke stage word de image van gemaakt.
+
+# stage 1: Building image containing both Maven and Java 21
+FROM maven:3.9.9-eclipse-temurin-21 as BUILD
+# De base image waar we alles op kunnen compilen. Deze bevat devkit en Maven.
+# as BUILD kun je dan gebruiken als verwijzing
+WORKDIR /app
+#directory waarin word gewerkt.
+COPY . .
+
+#copied hele project, dit is niet best-practice aangezien de dependicies in pom.xml 
+# nog worden aangepast maar voor nu oke. 
+
+RUN mvn package -DskipTests
+# compile het project in de juist image
+
+# stage 2: runtime 
+FROM eclipse-temurin:21-jre-alpine as RUNTIME
+#maak gebruik van een zo licht mogelijke container die jre bevat zodat die kan runnen.
+#denk bij iedere image gebruikt dat er mogelijk andere commandos kunnen zijn
+
+WORKDIR /app
+# weer verwijzen welke dir je gaat werken
+
+RUN adduser -S appuser
+#maak een nieuwe user aan. let hierop dat dit een ander command is als die van de vorige image.
+#omdat dit alpine is
+
+COPY --from=BUILD /app/target/*-SNAPSHOT.jar app.jar
+#kopieer de compiled omgeving vanuit de stage 1 image en drop hem in de runtime image.
+
+USER appuser
+# Welke user alles runt 
+
+EXPOSE 8080
+#documentatie van welke poort
+
+ENTRYPOINT [ "java", "-jar", "app.jar" ]
+#commandos die worden uitgevoerd bij start.
+
+Resultaat:
+
+De reden van deze Multistage dockerfile is zodat iedereen dus nu gewoon dit dockerfile kan gebruiken
+om te compilen en te draaien zonder handmatig te compilen. Ook is de uiteindelijke image veel kleiner 
+dan de vorige die we gebruikt hadden. Zie onderstaande:
+
+IMAGE                   ID             DISK USAGE   CONTENT SIZE   
+mini-payments-api:dev   e8e219763ad2        402MB          128MB -> multistage image      
+test:tag1               ea63916afc90        825MB          265MB -> originele image
+
+Minder megabytes betekent snellere pulls op k8s, snellere scale up en minder gewicht voor de pipeline
+
+Fase 4: Docker-compose file voor postgres en de app
+Snelle docker compose gemaakt zonder volume. Let op dat je alle environmental variables erin hebt.
+En bij het maken van een image je de docker file in de docker compose kan aangeven zodat docker-compose de run zelf start.
+build: . -> zo doe je hem erin
+
+
+Fase 5: Lokaal kubernetes cluster starten 
+Ik gebruik hierbij de ingebouwde kubernetes op docker.
+
+Ik heb nu 4 deployments:
+app-deployments.yaml -> de deployment van de app met de benodigde image, replicas en environmental variablen 
+app-service.yaml -> Het netwerk gedeelte die het verkeer loadbalancced tussen de apps 
+
+database-deployment.yaml -> deployment van database met 3 replicas op dit moment stateful
+hierbij expres 1 replica omdat ik geen statefulset of persistenvolumeclaim heb. 
+database-service.yaml -> ook het netwerk gedeelte van de db
+
+De Service verdeelt het verkeer over alle drie. Je app maakt een account aan op pod 1, haalt het op via pod 2, en krijgt “niet gevonden”. Een database is stateful: zet replicas: 1. 
+Later leer je hoe je een database wél betrouwbaar draait, met een StatefulSet en een PersistentVolumeClaim, maar nooit door simpelweg replicas op te hogen. Dit is trouwens een klassieke CKA-valkuil, dus goed dat je hem nu tegenkomt.
+
+Binenn de services.yml word er allemaal een netwerk tussen de vms van docker gemaakt. 
+Om deze op mijn machine te zien moet ik portforwarding naar mijn hostmachinen doen:
+kubectl port-forward kubectl port-forward svc/app 8080:8080
+
+Om in een pod te komen (bijvoorbeeld postgres):
+kubectl exec -it database-79d5d77c8b-d8lv9 -- psql -U payments -d payments
