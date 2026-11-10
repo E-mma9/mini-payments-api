@@ -16,12 +16,15 @@ spec:
         app: database
     spec:
       containers:
-        - name: postgres
-          image: postgres:17
-          env:
-            - name: POSTGRES_USER
-              value: payments
-            - name: POSTGRES_PASSWORD
-              value: payments
-            - name: POSTGRES_DB
-              value: payments
+      - name: postgres
+        image: postgres:17
+        env:
+        - name: POSTGRES_DB
+          value: payments
+        - name: POSTGRES_USER
+          value: payments
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mini-payments-secrets
+              key: SPRING_DATASOURCE_PASSWORD

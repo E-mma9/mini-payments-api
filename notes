@@ -179,6 +179,7 @@ docker build -t myapp:latest .
 minikube image load myapp:latest
 
 En ook niet vergeten de tunnel te maken zodat je nog tenminste localhost:3000 kan bereiken
+kubectl port-forward svc/app 8080:8080 
 
 
 Volgende stappen:

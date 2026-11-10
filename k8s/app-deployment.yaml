@@ -1,27 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  name: mini-payments-deployment
   labels:
     app: app
-  name: app
 spec:
   replicas: 3
   selector:
     matchLabels:
       app: app
-  strategy: {}
   template:
     metadata:
       labels:
         app: app
     spec:
       containers:
-      - image: mini-payments-api:dev
-        name: mini-payments-api
-        env:  
-        - name: SPRING_DATASOURCE_URL
-          value:  jdbc:postgresql://database:5432/payments 
-        - name: SPRING_DATASOURCE_USERNAME
-          value: payments
-        - name: SPRING_DATASOURCE_PASSWORD
-          value: payments 
+      - name: mini-payments-container
+        image: mini-payments-api:dev
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: mini-payments-config
+        - secretRef:
+            name: mini-payments-secrets
+            
