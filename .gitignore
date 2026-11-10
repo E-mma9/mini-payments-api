@@ -7,3 +7,4 @@ target/
 
 # macOS
 .DS_Store
+k8s/app-secret.yaml

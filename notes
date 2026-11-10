@@ -182,13 +182,32 @@ En ook niet vergeten de tunnel te maken zodat je nog tenminste localhost:3000 ka
 kubectl port-forward svc/app 8080:8080 
 
 
-Volgende stappen:
-
+## Volgende stappen:
+10-11-2026
 1. Configmap en Secret
 binnen een configmap hoort niet-geheime config zoals database url en username,
 Deze config hoort los van deploymentyaml en de image, hierdoor kun je de image gebruiken met 
 andere waarde. 
 
+1 -- uitslag
+Na strijden heb ik het kunnen laten werken. De volgende problemen kwamen voor:
+
+- YAML inspringing was verkeerd, let hier duidelijk op of iets een dochter of zusterobject is. 
+- Binnen kubectl describe <podnaam> kun je zien waaruit de environmental variabelen worden gehaald. 
+- Bij kubectl logs pod <podnaam> of bij het applyen van een rollout kun je de fout meestal duidelijk vinden
+in dit geval was het 'unknown field "envFrom[0].name" ' Dus dat de env files in config niet gevonden worden. 
+
+- Al deze provlemen kwam voor door 1 foute ontwerpkeuze: 1 secret die bij twee containers een andere name:value hadden. DB verwachte een andere naam dan de app dus de verwijzingen waren in de war. In prod word ene db meestal buiten cluster gezet en dan met managed identity ofso.
+
+ongeveer 1:30/2:00 uur aan besteed. 
+
+---------------------------------------------
+natuurlijk ging er nog wat fout tussendoor:
+Als je de db start terwijl de app al draaid word er een verbinding gestart met de oude db, dus de migratie met flyway word niet gedaan. Zorg er dus voor dat de db tegelijk of voor de apps draait.
+20 minuten troubleshoot
+
+
+--------------------------------------------
 2. Statefulset en PersistentVolumeClaim
 Een statefulset is een deployment voor stateful apps, door een vast posnaam en eigen volume per pod te hebben. 
 Een persistenvolumeclaim is de aanvraag vor opslag. 
@@ -206,3 +225,4 @@ Een http router voor de cluster host en portforwarding
 Service type loadbalancer of nodeport per app schaalt niet, hiervoor heb je centraal ingang via ingress
 
 Per stap kun je het testen met kubectl describe, kubectl logs en kubectl get events. Daar leer je het meeste van, want je gaat in k8s veel debuggen.
+
