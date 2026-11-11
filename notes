@@ -208,15 +208,56 @@ Als je de db start terwijl de app al draaid word er een verbinding gestart met d
 
 
 --------------------------------------------
-2. Statefulset en PersistentVolumeClaim
+2. PersistentVolumeClaim
 Een statefulset is een deployment voor stateful apps, door een vast posnaam en eigen volume per pod te hebben. 
 Een persistenvolumeclaim is de aanvraag vor opslag. 
+
+uitslag:
+Een database-pvc.yml aangemaakt waar ik een aanvraag doe voor storage voor mijn database, deze heb ik in mijn deployments verwezen en op het pad: /var/lib/postgresql/data ---> dit is het pad op container die blijft na deletion pod. Na testen is het gelukt. Wel veel moeite gehad met het bouwen van de yaml files daar moet ik zeker op terugkomen voor cka. 
+
+-----------------------------------------
 
 3. Liveness en readiness-probes
 k8s doet dan perodieke cheacks op je container.
 Deze readiness bepaalt of er verkeer naar de pod mag, liveness bepaald of de pod restart moet worden 
 
-Recouce requests en limits
+Oke na vechten en oefenen heb ik een paar dingen 
+
+Je heb drie soorten probes:
+
+1. Readiness-probe: 
+De vraag of een pod klaar is om traffic te ontvangen. Hieronder een voorbeeld. Als de readiness faalt krijgt pod geen traffic.
+'readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          periodSeconds: 5'
+
+2. liveness-probe: 
+Is het proces in de applicatie nog gezond, zo niet? restart
+livenessProbe:
+          httpGet: 
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+
+3. startup-probe:
+Checkt of de app klaar is met starten
+startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          failureThreshold: 30
+          periodSeconds: 10
+
+
+Deze probes vallen onder de container dus zet ze op dezelfde column in de yaml. 
+
+
+
+
+4. Recouce requests en limits
 requests is wat de scheduler reserveert en de limits is het machine
 Dit is belangrijk want zonder limit kan 1 pod de hele node leegtrekken van haar resources en zonder requests kan de scheduler niet goed plaatsen
 
@@ -226,3 +267,20 @@ Service type loadbalancer of nodeport per app schaalt niet, hiervoor heb je cent
 
 Per stap kun je het testen met kubectl describe, kubectl logs en kubectl get events. Daar leer je het meeste van, want je gaat in k8s veel debuggen.
 
+Om ingress te gebruiken moet je het volgende hebben:
+1. ingress -> ingress.yaml met de regels en de verwijzingen
+2. ingress controller -> een bepaalde software zoals nginx of traefk die uitvoert
+3. Service -> endpoint die k8s availible maakt
+
+verkeer -> ingress-controller (een pod) -> lees ingress-rules (uit ingress.yaml) -> Service endpoint -> pods
+
+-----------------------------
+Hieronder een paar YAML-generator commands. Hiermee kun je snel yamls opbouwen. probeer dit zoveelmogelijk te gebruiken ten voorbereiding van cka
+
+Deployment	-------------------- kubectl create deployment web --image=nginx --replicas=2 --dry-run=client -o yaml > web.yaml
+
+Pod	---------------- kubectl run web --image=nginx --dry-run=client -o yaml
+
+Service ----------------	kubectl  expose deployment web --port=80 --dry-run=client -o yaml
+
+Role	------------- kubectl create role <naam> --verb=<..> --resource=<..> --dry-run=client -o yaml

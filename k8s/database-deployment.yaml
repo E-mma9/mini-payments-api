@@ -31,7 +31,16 @@ spec:
           volumeMounts:
             - name: database-storage
               mountPath: /var/lib/postgresql/data
+          readinessProbe:
+             exec:
+               command:
+                 - pg_isready
+                 - -U
+                 - payments
+             initialDelaySeconds: 5
+             periodSeconds: 10
       volumes:
         - name: database-storage
           persistentVolumeClaim:
             claimName: database-pvc
+          
